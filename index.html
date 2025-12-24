@@ -9,7 +9,7 @@
     <!-- Font -->
     <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet">
     <style>
-        body { font-family: sans-serif; user-select: none; -webkit-user-select: none; }
+        body { font-family: sans-serif; user-select: none; -webkit-user-select: none; overflow: hidden; background-color: #1a202c; }
         .font-lcd { font-family: 'Share Tech Mono', monospace; }
         
         /* Custom LCD Light Effect */
@@ -23,33 +23,41 @@
         .chunk-row { display: flex; width: 100%; gap: 1px; }
         .chunk { flex: 1; background-color: rgba(0,0,0,0.05); height: 100%; border-radius: 1px; }
         .chunk.active { background-color: #111; }
+        
+        /* Smooth Scale Transition */
+        #clock-container {
+            transition: transform 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        }
     </style>
 </head>
-<body class="min-h-screen bg-gray-200 flex items-center justify-center p-4 overflow-hidden">
+<body class="min-h-screen flex items-center justify-center">
 
-    <!-- Watch Container (Scaled Up for Table Clock) -->
-    <div class="relative transform scale-[1.8] sm:scale-[2.0]">
+    <!-- Watch Container -->
+    <!-- Initial scale set to 1, JS handles the rest -->
+    <div id="clock-container" class="relative">
 
         <!-- WATCH CASE -->
         <div class="relative bg-gray-900 w-80 h-64 rounded-3xl shadow-2xl flex flex-col items-center justify-center border-4 border-gray-800">
             
-            <!-- BUTTONS (Hidden labels, but buttons remain functional) -->
+            <!-- BUTTONS -->
             
             <!-- Top Left: Light -->
             <div id="btn-light" class="absolute -left-2 top-10 w-3 h-8 bg-gray-500 rounded-l-md shadow-lg border-r border-gray-600 z-20 cursor-pointer flex items-center justify-center active:translate-x-1 transition-transform" title="Light">
-                <!-- Hit area expander -->
                 <div class="absolute w-10 h-12 -left-2 bg-transparent"></div>
+            </div>
+
+            <!-- Top Right: Maximize / Cinema Mode (NEW) -->
+            <div id="btn-maximize" class="absolute -right-2 top-10 w-3 h-8 bg-red-800 rounded-r-md shadow-lg border-l border-gray-600 z-20 cursor-pointer flex items-center justify-center active:-translate-x-1 transition-transform" title="Cinema Mode">
+                <div class="absolute w-10 h-12 -right-2 bg-transparent"></div>
             </div>
 
             <!-- Bottom Left: Mode -->
             <div id="btn-mode" class="absolute -left-2 bottom-10 w-3 h-8 bg-gray-500 rounded-l-md shadow-lg border-r border-gray-600 z-20 cursor-pointer flex items-center justify-center active:translate-x-1 transition-transform" title="Mode">
-                <!-- Hit area expander -->
                 <div class="absolute w-10 h-12 -left-2 bg-transparent"></div>
             </div>
 
             <!-- Bottom Right: Beep -->
             <div id="btn-beep" class="absolute -right-2 bottom-10 w-3 h-8 bg-gray-500 rounded-r-md shadow-lg border-l border-gray-600 z-20 cursor-pointer flex items-center justify-center active:-translate-x-1 transition-transform" title="Beep">
-               <!-- Hit area expander -->
                <div class="absolute w-10 h-12 -right-2 bg-transparent"></div>
             </div>
 
@@ -143,8 +151,10 @@
         let beepEnabled = false;
         let mode = 'normal'; // 'normal' | 'remaining' | 'visual'
         let audioCtx = null;
+        let isMaximized = false; // Start in normal scale
 
         // --- Elements ---
+        const container = document.getElementById('clock-container');
         const lcdScreen = document.getElementById('lcd-screen');
         const viewNormal = document.getElementById('view-normal');
         const viewVisual = document.getElementById('view-visual');
@@ -171,9 +181,30 @@
                 container.appendChild(chunk);
             }
         }
-        createChunks(rowH, 24); // 24 Hours
-        createChunks(rowM, 60); // 60 Minutes
-        createChunks(rowS, 60); // 60 Seconds
+        createChunks(rowH, 24); 
+        createChunks(rowM, 60); 
+        createChunks(rowS, 60); 
+
+        // --- Scaling Logic (Echo Show 8 Optimization) ---
+        function updateScale() {
+            // Base dimensions of the watch component (Tailwind w-80=320px, h-64=256px)
+            const baseW = 320; 
+            const baseH = 256;
+            
+            // Safe area padding
+            const padding = 20;
+
+            if (isMaximized) {
+                // Calculate max scale to fit screen while maintaining aspect ratio
+                const scaleX = (window.innerWidth - padding) / baseW;
+                const scaleY = (window.innerHeight - padding) / baseH;
+                const scale = Math.min(scaleX, scaleY);
+                container.style.transform = `scale(${scale})`;
+            } else {
+                // Default Scale (Table Mode) - Large but reasonable
+                container.style.transform = `scale(2)`;
+            }
+        }
 
         // --- Audio Logic ---
         function initAudio() {
@@ -203,24 +234,17 @@
             osc.stop(audioCtx.currentTime + duration);
         }
 
-        function playHighPitchBeep() {
-            playBeep(4000, 0.08); // Minute chirp
-        }
-
-        function playButtonSound() {
-            playBeep(2000, 0.05);
-        }
+        function playHighPitchBeep() { playBeep(4000, 0.08); }
+        function playButtonSound() { playBeep(2000, 0.05); }
 
         // --- Time Logic ---
         function updateTime() {
             const now = new Date();
             
-            // Beep Logic (only on 00 seconds if enabled)
             if (beepEnabled && now.getSeconds() === 0) {
                 if (audioCtx) playHighPitchBeep();
             }
 
-            // MODE HANDLING
             if (mode === 'visual') {
                 viewNormal.classList.add('hidden');
                 viewVisual.classList.remove('hidden');
@@ -229,7 +253,6 @@
                 const m = now.getMinutes();
                 const s = now.getSeconds();
 
-                // Update Chunks
                 Array.from(rowH.children).forEach((chunk, i) => chunk.classList.toggle('active', i < h));
                 Array.from(rowM.children).forEach((chunk, i) => chunk.classList.toggle('active', i < m));
                 Array.from(rowS.children).forEach((chunk, i) => chunk.classList.toggle('active', i < s));
@@ -238,12 +261,10 @@
                 viewNormal.classList.remove('hidden');
                 viewVisual.classList.add('hidden');
 
-                // Date
                 const days = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'];
                 elDayName.innerText = days[now.getDay()];
                 elDayNum.innerText = now.getDate();
 
-                // Time Display
                 if (mode === 'normal') {
                     elMode.innerText = '24H';
                     const h = now.getHours().toString().padStart(2, '0');
@@ -253,7 +274,6 @@
                     elSeconds.innerText = s;
                 } else if (mode === 'remaining') {
                     elMode.innerText = 'REM';
-                    // Calculate remaining
                     const totalSecondsToday = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
                     const secondsInDay = 86400; 
                     let diff = secondsInDay - totalSecondsToday;
@@ -271,35 +291,33 @@
 
         // --- Event Listeners ---
         
-        // Light Button
         document.getElementById('btn-light').addEventListener('click', () => {
             initAudio();
             lcdScreen.classList.add('lcd-light');
-            setTimeout(() => {
-                lcdScreen.classList.remove('lcd-light');
-            }, 2000);
+            setTimeout(() => lcdScreen.classList.remove('lcd-light'), 2000);
         });
 
-        // Mode Button (Bottom Left)
+        // Toggle Fullscreen / Maximize
+        document.getElementById('btn-maximize').addEventListener('click', () => {
+            initAudio();
+            playButtonSound();
+            isMaximized = !isMaximized;
+            updateScale();
+        });
+
         document.getElementById('btn-mode').addEventListener('click', () => {
             initAudio();
             playButtonSound();
-            
-            // Cycle: Normal -> Remaining -> Visual -> Normal
             if (mode === 'normal') mode = 'remaining';
             else if (mode === 'remaining') mode = 'visual';
             else mode = 'normal';
-
-            updateTime(); // update immediately
+            updateTime();
         });
 
-        // Toggle Beep Button (Bottom Right)
         document.getElementById('btn-beep').addEventListener('click', () => {
             initAudio();
             playButtonSound();
             beepEnabled = !beepEnabled;
-            
-            // Update UI
             if (beepEnabled) {
                 sigIcon.classList.remove('opacity-20');
                 sigIcon.classList.add('opacity-100', 'text-black', 'font-extrabold');
@@ -311,9 +329,13 @@
             }
         });
 
+        // Initialize Scaling
+        window.addEventListener('resize', updateScale);
+        updateScale(); // Initial call
+        
         // Start Loop
         setInterval(updateTime, 1000);
-        updateTime(); // Initial call
+        updateTime(); 
     </script>
 </body>
 </html>

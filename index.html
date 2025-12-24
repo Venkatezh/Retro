@@ -235,7 +235,13 @@
         }
 
         function playHighPitchBeep() { playBeep(4000, 0.08); }
-        function playButtonSound() { playBeep(2000, 0.05); }
+        
+        function playButtonSound() { 
+            // Only play button sounds if Beep/SIG is enabled
+            if (beepEnabled) {
+                playBeep(2000, 0.05); 
+            }
+        }
 
         // --- Time Logic ---
         function updateTime() {
@@ -335,7 +341,9 @@
 
         document.getElementById('btn-beep').addEventListener('click', () => {
             initAudio();
+            // Play sound first (based on current state), then toggle
             playButtonSound();
+            
             beepEnabled = !beepEnabled;
             if (beepEnabled) {
                 sigIcon.classList.remove('opacity-20');

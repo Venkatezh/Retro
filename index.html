@@ -301,8 +301,27 @@
         document.getElementById('btn-maximize').addEventListener('click', () => {
             initAudio();
             playButtonSound();
-            isMaximized = !isMaximized;
-            updateScale();
+
+            if (!document.fullscreenElement) {
+                // Request native fullscreen
+                document.documentElement.requestFullscreen().catch(() => {
+                    // Fallback if unavailable
+                    isMaximized = !isMaximized;
+                    updateScale();
+                });
+            } else {
+                // Exit native fullscreen
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                }
+            }
+        });
+
+        // Listen for fullscreen changes (native ESC, swipe, etc.)
+        document.addEventListener('fullscreenchange', () => {
+            isMaximized = !!document.fullscreenElement;
+            // Delay slightly to let browser layout settle
+            setTimeout(updateScale, 100);
         });
 
         document.getElementById('btn-mode').addEventListener('click', () => {
